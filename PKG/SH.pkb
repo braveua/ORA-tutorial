@@ -43,28 +43,33 @@
 --------------------------------------------------------------------------------  
   FUNCTION insert_prod(p_url VARCHAR2, p_name VARCHAR2, p_shopid NUMBER) RETURN NUMBER AS
     l_id NUMBER;
+    l_old_name sh_prod.name%TYPE;
   BEGIN
     BEGIN
-      SELECT ID INTO l_id FROM sh_prod WHERE URL = p_url and shopid = p_shopid;
-      
-      UPDATE sh_prod SET NAME=p_name WHERE id = l_id;
-      
+      SELECT ID, NAME INTO l_id, l_old_name FROM sh_prod WHERE URL = p_url AND shopid = p_shopid;
+
+      -- Обновляем только если название изменилось
+      IF l_old_name != p_name OR (l_old_name IS NULL AND p_name IS NOT NULL) OR (l_old_name IS NOT NULL AND p_name IS NULL) THEN
+        UPDATE sh_prod SET NAME = p_name WHERE id = l_id;
+      END IF;
+
+      RETURN l_id;
+
       EXCEPTION
         WHEN NO_DATA_FOUND THEN
-          --DBMS_OUTPUT.PUT_LINE('NO DATA FOUND');
           BEGIN
             INSERT INTO sh_prod (URL, NAME, shopid) VALUES (p_url, p_name, p_shopid) RETURNING ID INTO l_id;
             RETURN l_id;
-            EXCEPTION
-              WHEN DUP_VAL_ON_INDEX THEN
-                begin
-                  NULL;
-                end;
-              when others then
-                DBMS_OUTPUT.PUT_LINE('aaaaaaaaaaaaaaaa!!!!!!!!!!!');
+          EXCEPTION
+            WHEN DUP_VAL_ON_INDEX THEN
+              -- Другой поток уже вставил — вернуть его ID
+              SELECT ID INTO l_id FROM sh_prod WHERE URL = p_url AND shopid = p_shopid;
+              RETURN l_id;
+            WHEN OTHERS THEN
+              DBMS_OUTPUT.PUT_LINE('aaaaaaaaaaaaaaaa!!!!!!!!!!!');
+              RAISE;
           END;
     END;
-    RETURN l_id;
   END insert_prod;
   ------------------------------------------------------------------------------
   PROCEDURE insert_price(p_shopid NUMBER,
